@@ -15,6 +15,12 @@
             <Button Name="saveButton" Content="Save" Click="saveButton_Click" Padding="5" Margin="10"></Button>
             <Button Name="sendButton" Content="Send" Click="sendButton_Click" Padding="5" Margin="10"></Button>
         </StackPanel>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+            <Button Name="stopButton" Content="Stop Program" Click="stopButtonClick" Padding="5" Margin="10"></Button>
+            <Button Name="startButton" Content="Start Program" Click="startButtonClick" Padding="5" Margin="10"></Button>
+            <Button Name="pauseButton" Content="Pause Program" Click="pauseButtonClick" Padding="5" Margin="10"></Button>
+            <Button Name="resumeButton" Content="Resume Program" Click="resumeButtonClick" Padding="5" Margin="10"></Button>
+        </StackPanel>
         <StackPanel Orientation="Horizontal" Margin="10">
             <ComboBox Name="portsComboBox">  </ComboBox>
             <Button Name="refreshPortsButton" Content="Refresh" Click="refershPortsButton_Click" Padding="5" Margin="10"></Button>
@@ -24,11 +30,10 @@
         <TextBlock Text="Serial Comms"></TextBlock>
         <TextBox IsReadOnly="True" Name="serialDataTextBox" Height="100" ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ></TextBox>
         <Button Name="clearButton" Content="Clear" Click="clearButton_Click" Padding="5" Margin="10"></Button>
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-            <Button Name="stopButton" Content="Stop Program" Click="stopButtonClick" Padding="5" Margin="10"></Button>
-            <Button Name="startButton" Content="Start Program" Click="startButtonClick" Padding="5" Margin="10"></Button>
-            <Button Name="pauseButton" Content="Pause Program" Click="pauseButtonClick" Padding="5" Margin="10"></Button>
-            <Button Name="resumeButton" Content="Resume Program" Click="resumeButtonClick" Padding="5" Margin="10"></Button>
+        <StackPanel Orientation="Horizontal">
+            <ComboBox Name="MQTTrobotNames"></ComboBox>
+            <Button Name="MQTTSendButton" Content="Send" Click="mqttSendButton_Click" Padding="5" Margin="10"></Button>
         </StackPanel>
+        <TextBox IsReadOnly="True" Name="MQTTDataTextBox" Height="100" ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ></TextBox>
     </StackPanel>
 </Window>

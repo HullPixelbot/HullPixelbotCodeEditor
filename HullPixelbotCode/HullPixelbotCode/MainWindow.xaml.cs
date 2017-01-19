@@ -16,6 +16,10 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 
+using Microsoft.Azure.Devices;
+using Microsoft.Azure.Devices.Common.Exceptions;
+
+
 namespace HullPixelbotCode
 {
     /// <summary>
@@ -29,7 +33,217 @@ namespace HullPixelbotCode
 
         }
 
-        void populatePorts()
+
+        #region Serial Monitor display
+        void resetSerialMonitor()
+        {
+            // Clear the monitor window
+            serialDataTextBox.Text = "";
+        }
+
+        void addLineOfTextToSerialMonitor(string message)
+        {
+            serialDataTextBox.Dispatcher.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.Normal,
+                new Action(
+                delegate ()
+                {
+                    serialDataTextBox.Text = serialDataTextBox.Text + System.Environment.NewLine + message;
+                }
+            ));
+        }
+
+        void addTextToSerialMonitor(string message)
+        {
+            serialDataTextBox.Dispatcher.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.Normal,
+                new Action(
+                delegate ()
+                {
+                    serialDataTextBox.Text = serialDataTextBox.Text + message;
+                }
+            ));
+        }
+
+        #endregion
+
+
+        #region MQTT Monitor display
+        void resetMQTTMonitor()
+        {
+            // Clear the monitor window
+            MQTTDataTextBox.Text = "";
+        }
+
+        void addLineOfTextToMQTTMonitor(string message)
+        {
+            MQTTDataTextBox.Dispatcher.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.Normal,
+                new Action(
+                delegate ()
+                {
+                    MQTTDataTextBox.Text = MQTTDataTextBox.Text + System.Environment.NewLine + message;
+                }
+            ));
+        }
+
+        void addTextToMQTTMonitor(string message)
+        {
+            MQTTDataTextBox.Dispatcher.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.Normal,
+                new Action(
+                delegate ()
+                {
+                    serialDataTextBox.Text = MQTTDataTextBox.Text + message;
+                }
+            ));
+        }
+
+        #endregion
+
+
+        #region Code Assembly 
+
+        const int TERMINATOR = 0x00;
+
+
+        void addStringToByteList(string input, List<byte> output)
+        {
+            foreach (char ch in input)
+                output.Add((byte)ch);
+        }
+
+        /// <summary>
+        /// Takes the program source and converts it into a packet for delivery to the robot.
+        /// Adds the download command at the start of the packet
+        /// Makes sure that each statement is separated by a return character, calculates and adds the checksum and adds the terminator
+        /// </summary>
+        /// <param name="code">lines of program source</param>
+        /// <returns>string to be sent to the robot</returns>
+        byte [] assembleProgram(string code)
+        {
+            List<byte> output = new List<byte>();
+
+            addStringToByteList("\rRM\r", output);
+
+            byte checksum = 0;
+
+            char lastCh = ' ';
+
+            foreach (char ch in code)
+            {
+                if (ch == '\n')
+                {
+                    // ignore linefeeds - only using CR
+                    continue;
+                }
+
+                output.Add((byte)ch);
+
+                checksum += (byte)ch;
+                lastCh = ch;
+            }
+
+            if (lastCh != '\r')
+            {
+                // Add a terminator on the last line
+                output.Add((byte)'\r');
+                checksum += (byte)'\r';
+            }
+
+            // write the terminator
+            output.Add((byte)TERMINATOR);
+
+            // add the terminator to the checksum
+            checksum += TERMINATOR;
+
+            // write the checksum
+
+            output.Add((byte)checksum);
+
+            return output.ToArray();
+        }
+
+        #endregion
+
+        #region MQTT methods
+
+        MQTT mqttconnection;
+
+        void connectMQTT()
+        {
+            mqttconnection = new MQTT(
+                    MQTTconnectionString: "HostName=HullPixelbot.azure-devices.net;SharedAccessKeyName=iothubowner;SharedAccessKey=3l6MBea3c9YyIkWO9JRU6CKGi8DvVI9ILKo79EimgjM=",
+                    protocolGatewayHost: "");
+        }
+
+        async Task<string> populateRobots()
+        {
+            MQTTrobotNames.Items.Clear();
+
+            var devices = await mqttconnection.GetDevices();
+
+            foreach (DeviceEntity device in devices)
+            {
+                if(device.ConnectionState == "Connected")
+                    MQTTrobotNames.Items.Add(device);
+            }
+
+            return "MQTT robot list complete";
+        }
+
+        async Task<string> mqttSendProgram(string program)
+        {
+            DeviceEntity selectedPort = MQTTrobotNames.SelectedItem as DeviceEntity;
+
+            // first see if a robot has been selected
+
+            if (selectedPort == null)
+            {
+                MessageBox.Show("No robot selected", "Send program file to MQTTT");
+                return "No robot selected";
+            }
+
+            // see if the selected robot is online
+
+            var devices = await mqttconnection.GetDevices();
+
+            string robotName=null;
+
+            foreach (DeviceEntity device in devices)
+            {
+                if(device.Id == selectedPort.Id)
+                {
+                    if(device.ConnectionState == "Connected")
+                    {
+                        robotName = device.Id;
+                    }
+                    break;
+                }
+            }
+
+            if (robotName==null)
+            {
+                MessageBox.Show("Selected robot not connected", "Send program file to MQTTT");
+                return "Selected robot not connected";
+            }
+
+
+            // If we get here we have a connected destination and a program to send
+            // Send it
+
+            byte[] programBytes = assembleProgram(program);
+
+            await mqttconnection.SyncSendToRobot(robotName, programBytes);
+
+            return "Program sent to MQTT";
+        }
+
+        #endregion
+
+        #region Serial connection
+
+        string populatePorts()
         {
             // Get the names of the currently active serial ports
             string[] portNames = SerialPort.GetPortNames();
@@ -49,6 +263,8 @@ namespace HullPixelbotCode
                 // Select the first port to get us started
                 portsComboBox.SelectedIndex = 0;
             }
+
+            return "Ports loaded";
         }
 
         SerialPort outputPort = null;
@@ -59,7 +275,7 @@ namespace HullPixelbotCode
 
             if (portNames.Length == 0)
             {
-                MessageBox.Show("No serial ports available", "Send program file");
+                MessageBox.Show("No serial ports available", "Serial port open");
                 return;
             }
 
@@ -69,7 +285,7 @@ namespace HullPixelbotCode
 
             if (selectedPort == null)
             {
-                MessageBox.Show("No serial port selected", "Send program file");
+                MessageBox.Show("No serial port selected", "Serial port open");
                 return;
             }
 
@@ -87,17 +303,17 @@ namespace HullPixelbotCode
 
             if (!foundPort)
             {
-                MessageBox.Show("The selected port is no longer available", "Send program file");
+                MessageBox.Show("The selected port is no longer available", "Serial port open");
                 return;
             }
 
-            addTextToMonitor("Connecting to " + selectedPort);
+            addTextToSerialMonitor("Connecting to " + selectedPort);
 
-            addLineOfTextToMonitor("");
+            addLineOfTextToSerialMonitor("");
 
             if (outputPort != null)
             {
-                addLineOfTextToMonitor("Closing existing port");
+                addLineOfTextToSerialMonitor("Closing existing port");
                 outputPort.Close();
             }
 
@@ -107,7 +323,16 @@ namespace HullPixelbotCode
 
             outputPort.DataReceived += OutputPort_DataReceived;
 
-            outputPort.Open();
+            try
+            {
+                outputPort.Open();
+            }
+            catch
+            {
+                MessageBox.Show("The selected port could not be opened. It may be in use.", "Serial port open");
+                outputPort = null;
+                return;
+            }
 
             return;
         }
@@ -116,29 +341,36 @@ namespace HullPixelbotCode
         {
             if (outputPort != null)
             {
-                addLineOfTextToMonitor("Closing serial port");
+                addLineOfTextToSerialMonitor("Closing serial port");
                 outputPort.Close();
                 outputPort = null;
             }
             else
             {
-                addLineOfTextToMonitor("No serial port to close");
+                addLineOfTextToSerialMonitor("No serial port to close");
             }
         }
 
-        void loadFile()
+        #endregion
+
+        #region File input/output
+
+        string loadFile()
         {
+            string result = "";
+
             OpenFileDialog loadDialog = new OpenFileDialog();
 
             loadDialog.CheckFileExists = true;
 
             if(loadDialog.ShowDialog()==true)
             {
-                codeEditTextBox.Text = File.ReadAllText(loadDialog.FileName);
+                result = File.ReadAllText(loadDialog.FileName);
             }
+            return result;
         }
 
-        void saveFile()
+        void saveFile(string text)
         {
             SaveFileDialog saveDialog = new SaveFileDialog();
 
@@ -146,43 +378,14 @@ namespace HullPixelbotCode
 
             if (saveDialog.ShowDialog()==true)
             {
-                File.WriteAllText(saveDialog.FileName, codeEditTextBox.Text);
+                File.WriteAllText(saveDialog.FileName, text);
             }
         }
 
-        void resetMonitor()
-        {
-            // Clear the monitor window
-            serialDataTextBox.Text = "";
-        }
+        #endregion
 
-        void addLineOfTextToMonitor(string message)
-        {
-            serialDataTextBox.Dispatcher.BeginInvoke(
-                System.Windows.Threading.DispatcherPriority.Normal,
-                new Action(
-                delegate ()
-                {
-                    serialDataTextBox.Text = serialDataTextBox.Text + System.Environment.NewLine + message;
-                }
-            ));
-        }
 
-        void addTextToMonitor(string message)
-        {
-            serialDataTextBox.Dispatcher.BeginInvoke(
-                System.Windows.Threading.DispatcherPriority.Normal,
-                new Action(
-                delegate ()
-                {
-                    serialDataTextBox.Text = serialDataTextBox.Text + message;
-                }
-            ));
-        }
-
-        const int TERMINATOR = 0x00;
-
-        void sendFile()
+        void sendFile(string text)
         {
             // See of we have a port we can use
 
@@ -192,46 +395,13 @@ namespace HullPixelbotCode
                 return;
             }
 
+            byte[] message = assembleProgram(text);
+
             // Got a working port - try to send the file
 
-            outputPort.Write("\rRM\r");
+            outputPort.Write(message, 0, message.Length);
 
-            byte checksum = 0;
-
-            char lastCh = ' ';
-
-            foreach(char ch in codeEditTextBox.Text)
-            {
-                if (ch == '\n')
-                {
-                    // ignore linefeeds - only using CR
-                    continue;
-                }
-                outputPort.Write(ch.ToString());
-
-                checksum += (byte)ch;
-                lastCh = ch;
-            }
-
-            byte[] oneByte = new byte[1];
-
-            if (lastCh != '\r')
-            {
-                // Add a terminator
-                oneByte[0] = (byte) '\r'; // terminator 
-                outputPort.Write(oneByte, 0, 1);
-                checksum += (byte)'\r';
-            }
-
-            // write the terminator
-
-            oneByte[0] = TERMINATOR; // terminator 
-
-            outputPort.Write( oneByte, 0, 1);
-
-            oneByte[0] = checksum; // checksum
-
-            outputPort.Write(oneByte, 0, 1);
+            return;
         }
 
         void sendMessage(string message)
@@ -267,27 +437,33 @@ namespace HullPixelbotCode
         private void OutputPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
         {
             SerialPort outputPort = sender as SerialPort;
-            addTextToMonitor(outputPort.ReadExisting());
+            addTextToSerialMonitor(outputPort.ReadExisting());
         }
 
         private void loadButton_Click(object sender, RoutedEventArgs e)
         {
-            loadFile();
+            codeEditTextBox.Text = loadFile();
         }
 
         private void saveButton_Click(object sender, RoutedEventArgs e)
         {
-            saveFile();
+            saveFile(codeEditTextBox.Text);
         }
 
         private void sendButton_Click(object sender, RoutedEventArgs e)
         {
-            sendFile();
+            sendFile(codeEditTextBox.Text);
         }
 
-        private void Window_Loaded(object sender, RoutedEventArgs e)
+        private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            populatePorts();
+            connectMQTT();
+
+            addLineOfTextToSerialMonitor(populatePorts());
+
+            string populateMessage = await populateRobots();
+
+            addLineOfTextToSerialMonitor(populateMessage);
         }
 
         private void refershPortsButton_Click(object sender, RoutedEventArgs e)
@@ -302,7 +478,7 @@ namespace HullPixelbotCode
 
         private void clearButton_Click(object sender, RoutedEventArgs e)
         {
-            resetMonitor();
+            resetSerialMonitor();
         }
 
         private void disconnectButton_Click(object sender, RoutedEventArgs e)
@@ -328,6 +504,12 @@ namespace HullPixelbotCode
         private void resumeButtonClick(object sender, RoutedEventArgs e)
         {
             resumeProgram();
+        }
+
+        private async void mqttSendButton_Click(object sender, RoutedEventArgs e)
+        {
+            string result = await mqttSendProgram(codeEditTextBox.Text);
+            addLineOfTextToSerialMonitor(result);
         }
     }
 }
