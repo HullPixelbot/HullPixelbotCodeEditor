@@ -192,8 +192,10 @@ namespace HullPixelbotCode
             return "MQTT robot list complete";
         }
 
-        async Task<string> mqttSendProgram(string program)
+        async Task<string> getMQTTDeviceName()
         {
+            string robotName = "";
+
             DeviceEntity selectedPort = MQTTrobotNames.SelectedItem as DeviceEntity;
 
             // first see if a robot has been selected
@@ -201,20 +203,18 @@ namespace HullPixelbotCode
             if (selectedPort == null)
             {
                 MessageBox.Show("No robot selected", "Send program file to MQTTT");
-                return "No robot selected";
+                return "";
             }
 
             // see if the selected robot is online
 
             var devices = await mqttconnection.GetDevices();
 
-            string robotName=null;
-
             foreach (DeviceEntity device in devices)
             {
-                if(device.Id == selectedPort.Id)
+                if (device.Id == selectedPort.Id)
                 {
-                    if(device.ConnectionState == "Connected")
+                    if (device.ConnectionState == "Connected")
                     {
                         robotName = device.Id;
                     }
@@ -222,12 +222,21 @@ namespace HullPixelbotCode
                 }
             }
 
-            if (robotName==null)
+            if (robotName == null)
             {
                 MessageBox.Show("Selected robot not connected", "Send program file to MQTTT");
-                return "Selected robot not connected";
+                return "";
             }
 
+            return robotName;
+        }
+
+        async Task<string> mqttSendProgram(string program)
+        {
+            string robotName = await getMQTTDeviceName();
+
+            if (robotName == "")
+                return "Robot not avaialable";
 
             // If we get here we have a connected destination and a program to send
             // Send it
@@ -237,6 +246,20 @@ namespace HullPixelbotCode
             await mqttconnection.SyncSendToRobot(robotName, programBytes);
 
             return "Program sent to MQTT";
+        }
+
+        async Task<string> mqttStartMonitor()
+        {
+            string robotName = await getMQTTDeviceName();
+
+            if (robotName == "")
+                return "Robot not avaialable";
+
+            string result = "";
+
+            result = await mqttconnection.MonitorRobot(robotName);
+
+            return result;
         }
 
         #endregion
@@ -382,8 +405,6 @@ namespace HullPixelbotCode
             }
         }
 
-        #endregion
-
 
         void sendFile(string text)
         {
@@ -403,6 +424,9 @@ namespace HullPixelbotCode
 
             return;
         }
+
+        #endregion
+
 
         void sendMessage(string message)
         {
@@ -510,6 +534,12 @@ namespace HullPixelbotCode
         {
             string result = await mqttSendProgram(codeEditTextBox.Text);
             addLineOfTextToSerialMonitor(result);
+        }
+
+        private async void MQTTMonitorButtonClick(object sender, RoutedEventArgs e)
+        {
+            string result = await mqttStartMonitor();
+            addLineOfTextToMQTTMonitor(result);
         }
     }
 }

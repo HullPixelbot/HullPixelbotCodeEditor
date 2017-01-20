@@ -7,6 +7,7 @@ using Microsoft.Azure.Devices;
 using Microsoft.Azure.Devices.Common.Exceptions;
 using Microsoft.ServiceBus.Messaging;
 using System.Threading;
+using Microsoft.Azure.Devices.Common;
 
 namespace HullPixelbotCode
 {
@@ -180,6 +181,32 @@ namespace HullPixelbotCode
                 );
         }
 
+        #endregion
+
+        #region Robot Message receiving
+
+        public async Task<string> MonitorRobot(string robotName)
+        {
+            string result = "";
+
+            EventHubClient eventHubClient = null;
+            EventHubReceiver eventHubReceiver = null;
+
+            try
+            {
+                eventHubClient = EventHubClient.CreateFromConnectionString(iotHubConnectionString, "messages/events");
+                int eventHubPartitionsCount = eventHubClient.GetRuntimeInformation().PartitionCount;
+                string partition = EventHubPartitionKeyResolver.ResolveToPartition(robotName, eventHubPartitionsCount);
+//                eventHubReceiver = eventHubClient.GetConsumerGroup(consumerGroupName).CreateReceiver(partition, startTime);
+
+            }
+            catch (Exception e)
+            {
+
+            }
+
+            return result;
+        }
 
         //private async void MonitorEventHubAsync(DateTime startTime, CancellationToken ct, string consumerGroupName)
         //{

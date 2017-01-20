@@ -33,7 +33,9 @@
         <StackPanel Orientation="Horizontal">
             <ComboBox Name="MQTTrobotNames"></ComboBox>
             <Button Name="MQTTSendButton" Content="Send" Click="mqttSendButton_Click" Padding="5" Margin="10"></Button>
+            <Button Name="MQTTMonitorButton" Content="Monitor MQTT" Click="MQTTMonitorButtonClick" Padding="5" Margin="10"></Button>
         </StackPanel>
         <TextBox IsReadOnly="True" Name="MQTTDataTextBox" Height="100" ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ></TextBox>
+        
     </StackPanel>
 </Window>
