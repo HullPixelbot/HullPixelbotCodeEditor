@@ -11,6 +11,12 @@ using Microsoft.Azure.Devices.Common;
 
 namespace HullPixelbotCode
 {
+
+    public interface IDisplayMQTTMessage
+    {
+        void DisplayMessageLine(string message);
+    }
+
     public class DeviceEntity : IComparable<DeviceEntity>
     {
         public string Id { get; set; }
@@ -53,11 +59,14 @@ namespace HullPixelbotCode
 
         private string protocolGatewayHostName { get; set; }
 
-        public MQTT (string MQTTconnectionString, string protocolGatewayHost)
+        IDisplayMQTTMessage messageDisplay;
+
+        public MQTT (string MQTTconnectionString, string protocolGatewayHost,IDisplayMQTTMessage messageDisplay)
         {
             this.registryManager = RegistryManager.CreateFromConnectionString(MQTTconnectionString);
             this.iotHubConnectionString = MQTTconnectionString;
             this.protocolGatewayHostName = protocolGatewayHost;
+            this.messageDisplay = messageDisplay;
         }
 
         private String CreateDeviceConnectionString(Device device)
@@ -185,7 +194,7 @@ namespace HullPixelbotCode
 
         #region Robot Message receiving
 
-        public async Task<string> MonitorRobot(string robotName)
+        public async Task<string> MonitorRobot(string selectedDevice, CancellationToken ct)
         {
             string result = "";
 
@@ -196,9 +205,71 @@ namespace HullPixelbotCode
             {
                 eventHubClient = EventHubClient.CreateFromConnectionString(iotHubConnectionString, "messages/events");
                 int eventHubPartitionsCount = eventHubClient.GetRuntimeInformation().PartitionCount;
-                string partition = EventHubPartitionKeyResolver.ResolveToPartition(robotName, eventHubPartitionsCount);
-//                eventHubReceiver = eventHubClient.GetConsumerGroup(consumerGroupName).CreateReceiver(partition, startTime);
+                string partition = EventHubPartitionKeyResolver.ResolveToPartition(selectedDevice, eventHubPartitionsCount);
+                string consumerGroupName = "$Default";
+                eventHubReceiver = eventHubClient.GetConsumerGroup(consumerGroupName).CreateReceiver(partition);
+                var events = await eventHubReceiver.ReceiveAsync(int.MaxValue, TimeSpan.FromSeconds(20));
+                string message = "";
 
+                foreach (var eventData in events)
+                {
+                    var data = Encoding.UTF8.GetString(eventData.GetBytes());
+                    var enqueuedTime = eventData.EnqueuedTimeUtc.ToLocalTime();
+                    var connectionDeviceId = eventData.SystemProperties["iothub-connection-device-id"].ToString();
+
+                    if (string.CompareOrdinal(selectedDevice.ToUpper(), connectionDeviceId.ToUpper()) == 0)
+                    {
+                        message = $"{enqueuedTime}> Device: [{connectionDeviceId}], Data:[{data}]";
+
+                        if (eventData.Properties.Count > 0)
+                        {
+                            message += "Properties:\r\n";
+                            foreach (var property in eventData.Properties)
+                            {
+                                message += $"'{property.Key}': '{property.Value}'\r\n";
+                            }
+                        }
+                        message += "\r\n";
+                    }
+                }
+
+                if(message.Length > 0)  
+                    messageDisplay.DisplayMessageLine(message);
+
+                while (true)
+                {
+                    message = "";
+
+                    ct.ThrowIfCancellationRequested();
+
+                    var eventData = await eventHubReceiver.ReceiveAsync(TimeSpan.FromSeconds(1));
+
+                    if (eventData != null)
+                    {
+                        var data = Encoding.UTF8.GetString(eventData.GetBytes());
+                        var enqueuedTime = eventData.EnqueuedTimeUtc.ToLocalTime();
+
+                        // Display only data from the selected device; otherwise, skip.
+                        var connectionDeviceId = eventData.SystemProperties["iothub-connection-device-id"].ToString();
+
+                        if (string.CompareOrdinal(selectedDevice, connectionDeviceId) == 0)
+                        {
+                            message += $"{enqueuedTime}> Device: [{connectionDeviceId}], Data:[{data}]";
+
+                            if (eventData.Properties.Count > 0)
+                            {
+                                message += "Properties:\r\n";
+                                foreach (var property in eventData.Properties)
+                                {
+                                    message += $"'{property.Key}': '{property.Value}'\r\n";
+                                }
+                            }
+                            message += "\r\n";
+                        }
+                        if (message.Length > 0)
+                            messageDisplay.DisplayMessageLine(message);
+                    }
+                }
             }
             catch (Exception e)
             {

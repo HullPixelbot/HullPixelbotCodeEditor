@@ -18,14 +18,14 @@ using System.Windows.Shapes;
 
 using Microsoft.Azure.Devices;
 using Microsoft.Azure.Devices.Common.Exceptions;
-
+using System.Threading;
 
 namespace HullPixelbotCode
 {
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
-    public partial class MainWindow : Window
+    public partial class MainWindow : Window, IDisplayMQTTMessage
     {
         public MainWindow()
         {
@@ -49,6 +49,7 @@ namespace HullPixelbotCode
                 delegate ()
                 {
                     serialDataTextBox.Text = serialDataTextBox.Text + System.Environment.NewLine + message;
+                    serialDataTextBox.ScrollToEnd();
                 }
             ));
         }
@@ -61,6 +62,7 @@ namespace HullPixelbotCode
                 delegate ()
                 {
                     serialDataTextBox.Text = serialDataTextBox.Text + message;
+                    serialDataTextBox.ScrollToEnd();
                 }
             ));
         }
@@ -83,6 +85,8 @@ namespace HullPixelbotCode
                 delegate ()
                 {
                     MQTTDataTextBox.Text = MQTTDataTextBox.Text + System.Environment.NewLine + message;
+                    // scroll text box to last line by moving caret to the end of the text
+                    MQTTDataTextBox.ScrollToEnd();
                 }
             ));
         }
@@ -98,6 +102,12 @@ namespace HullPixelbotCode
                 }
             ));
         }
+
+        public void DisplayMessageLine(string message)
+        {
+            addLineOfTextToMQTTMonitor(message);
+        }
+
 
         #endregion
 
@@ -174,7 +184,7 @@ namespace HullPixelbotCode
         {
             mqttconnection = new MQTT(
                     MQTTconnectionString: "HostName=HullPixelbot.azure-devices.net;SharedAccessKeyName=iothubowner;SharedAccessKey=3l6MBea3c9YyIkWO9JRU6CKGi8DvVI9ILKo79EimgjM=",
-                    protocolGatewayHost: "");
+                    protocolGatewayHost: "", messageDisplay: this);
         }
 
         async Task<string> populateRobots()
@@ -231,6 +241,7 @@ namespace HullPixelbotCode
             return robotName;
         }
 
+
         async Task<string> mqttSendProgram(string program)
         {
             string robotName = await getMQTTDeviceName();
@@ -248,8 +259,12 @@ namespace HullPixelbotCode
             return "Program sent to MQTT";
         }
 
+        private static CancellationTokenSource ctsForDataMonitoring;
+
         async Task<string> mqttStartMonitor()
         {
+            ctsForDataMonitoring = new CancellationTokenSource();
+
             string robotName = await getMQTTDeviceName();
 
             if (robotName == "")
@@ -257,7 +272,7 @@ namespace HullPixelbotCode
 
             string result = "";
 
-            result = await mqttconnection.MonitorRobot(robotName);
+            result = await mqttconnection.MonitorRobot(robotName, ctsForDataMonitoring.Token);
 
             return result;
         }
@@ -541,5 +556,6 @@ namespace HullPixelbotCode
             string result = await mqttStartMonitor();
             addLineOfTextToMQTTMonitor(result);
         }
+
     }
 }
