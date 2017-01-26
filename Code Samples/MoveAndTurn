@@ -1,0 +1,17 @@
+#avoider
+# move and turn away from objects
+cltop
+cistartmotors
+cjdistanceTest
+clstartmotors
+pc255,0,0
+mf100
+cldistanceTest
+cm3,hit
+cd2
+cjtop
+clhit
+pc255,255,0
+mr90
+ca
+cjtop

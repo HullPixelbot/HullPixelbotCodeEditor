@@ -114,9 +114,6 @@ namespace HullPixelbotCode
 
         #region Code Assembly 
 
-        const int TERMINATOR = 0x00;
-
-
         void addStringToByteList(string input, List<byte> output)
         {
             foreach (char ch in input)
@@ -136,8 +133,6 @@ namespace HullPixelbotCode
 
             addStringToByteList("\rRM\r", output);
 
-            byte checksum = 0;
-
             char lastCh = ' ';
 
             foreach (char ch in code)
@@ -150,7 +145,6 @@ namespace HullPixelbotCode
 
                 output.Add((byte)ch);
 
-                checksum += (byte)ch;
                 lastCh = ch;
             }
 
@@ -158,18 +152,9 @@ namespace HullPixelbotCode
             {
                 // Add a terminator on the last line
                 output.Add((byte)'\r');
-                checksum += (byte)'\r';
             }
 
-            // write the terminator
-            output.Add((byte)TERMINATOR);
-
-            // add the terminator to the checksum
-            checksum += TERMINATOR;
-
-            // write the checksum
-
-            output.Add((byte)checksum);
+            addStringToByteList("RX\r", output);
 
             return output.ToArray();
         }
@@ -355,7 +340,7 @@ namespace HullPixelbotCode
                 outputPort.Close();
             }
 
-            outputPort = new SerialPort(selectedPort, 9600, Parity.None);
+            outputPort = new SerialPort(selectedPort, 1200, Parity.None);
 
             outputPort.DiscardNull = false;
 

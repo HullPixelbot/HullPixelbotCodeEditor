@@ -1,0 +1,5 @@
+# Test move waiting
+PC0,255,0
+MF100
+CA
+PC255,0,0

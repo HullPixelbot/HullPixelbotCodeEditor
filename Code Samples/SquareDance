@@ -1,0 +1,10 @@
+#square dance
+# move and turn in a loop
+cltop
+pc255,0,0
+mf100
+ca
+pc0,255,0
+mr100
+ca
+cjtop

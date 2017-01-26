@@ -1,0 +1,9 @@
+# Test move waiting
+PC0,255,0
+MF100
+CLloop
+CIi
+PC0,255,255
+CJloop
+CLi
+PC255,0,0
